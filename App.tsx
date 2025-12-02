@@ -11,7 +11,7 @@ const FRICTION = 0.96;
 const MAX_SPEED = 28;
 const MAX_NITRO_SPEED = 60; 
 const ROTATION_SPEED = 0.04;
-const AIR_ROTATION_BOOST = 1.8; // Bonus rotation speed when in air
+const AIR_ROTATION_BOOST = 2.0; // Increased for easier 360s
 const ANGULAR_DAMPING = 0.92;
 const WHEEL_BASE = 70;
 const CANVAS_WIDTH = 1920;
@@ -30,18 +30,36 @@ const COLORS = {
   uiButton: '#E6B0AA',
 };
 
-// --- Data: Bikes ---
+// --- Data: Bikes (Unique, No Duplicates) ---
 const BIKES: BikeConfig[] = [
-  { id: 0, name: 'The Classic', style: BikeStyle.CHOPPER, price: 0, colors: { body: '#C0392B', detail: '#F1C40F', seat: '#111' } },
-  { id: 1, name: 'Red Rocket', style: BikeStyle.SPORT, price: 100, colors: { body: '#E74C3C', detail: '#FFF', seat: '#2C3E50' } },
-  { id: 2, name: 'Police Patrol', style: BikeStyle.POLICE, price: 300, colors: { body: '#FFF', detail: '#2C3E50', seat: '#111' } },
-  { id: 3, name: 'Nana Cruiser', style: BikeStyle.SCOOTER, price: 500, colors: { body: '#1ABC9C', detail: '#ECF0F1', seat: '#D35400' } },
-  { id: 4, name: 'Toxic Racer', style: BikeStyle.SPORT, price: 800, colors: { body: '#2ECC71', detail: '#16A085', seat: '#222' } },
-  { id: 5, name: 'Royal Jalal', style: BikeStyle.CHOPPER, price: 1200, colors: { body: '#8E44AD', detail: '#F1C40F', seat: '#FFF' } },
-  { id: 6, name: 'Enforcer', style: BikeStyle.POLICE, price: 1500, colors: { body: '#2C3E50', detail: '#FFF', seat: '#34495E' } },
-  { id: 7, name: 'Pink Fury', style: BikeStyle.SCOOTER, price: 2000, colors: { body: '#E91E63', detail: '#FCE4EC', seat: '#FFF' } },
-  { id: 8, name: 'Night Rider', style: BikeStyle.SPORT, price: 3000, colors: { body: '#111', detail: '#333', seat: '#C0392B' } },
-  { id: 9, name: 'Golden Legend', style: BikeStyle.CHOPPER, price: 5000, colors: { body: '#FFF', detail: '#C0392B', seat: '#F1C40F' } },
+  { 
+      id: 0, 
+      name: 'The Viking', 
+      style: BikeStyle.CHOPPER, 
+      price: 0, 
+      colors: { body: '#C0392B', detail: '#F1C40F', seat: '#111' } 
+  },
+  { 
+      id: 1, 
+      name: 'Nana Cruiser', 
+      style: BikeStyle.SCOOTER, 
+      price: 500, 
+      colors: { body: '#1ABC9C', detail: '#ECF0F1', seat: '#D35400' } 
+  },
+  { 
+      id: 2, 
+      name: 'Police Interceptor', 
+      style: BikeStyle.POLICE, 
+      price: 1500, 
+      colors: { body: '#2C3E50', detail: '#FFF', seat: '#34495E' } 
+  },
+  { 
+      id: 3, 
+      name: 'Pro Racer X', 
+      style: BikeStyle.SPORT, 
+      price: 3000, 
+      colors: { body: '#E74C3C', detail: '#FFF', seat: '#2C3E50' } 
+  },
 ];
 
 const DEVELOPERS = [
@@ -70,17 +88,20 @@ const generateTerrain = (length: number, seed: number): Point[] => {
     const x = i * segmentLength;
     
     // EXTREME RAMP GENERATION LOGIC
-    // We create massive peaks for backflips
-    const rampFrequency = 0.15;
-    const rampHeight = 400;
+    // We create massive sharp peaks for launching
+    const rampFrequency = 0.12;
+    const rampHeight = 450; // Taller ramps
     
     // Base rolling hills
-    const noise1 = Math.sin((i * 0.1) + seed) * 100;
+    const noise1 = Math.sin((i * 0.1) + seed) * 80;
     
-    // Sharp Ramps
+    // Sharp Launch Ramps
     const rampPhase = (i * rampFrequency) + seed * 3;
-    const ramp = Math.pow(Math.sin(rampPhase), 5); // Sharp peaks
-    const noise2 = ramp > 0 ? ramp * rampHeight : 0;
+    // Using a sharper power curve to create "launch" shapes
+    const rampRaw = Math.sin(rampPhase);
+    const ramp = rampRaw > 0 ? Math.pow(rampRaw, 4) : 0; 
+    
+    const noise2 = ramp * rampHeight;
     
     let noise = noise1 + noise2;
     
@@ -90,7 +111,7 @@ const generateTerrain = (length: number, seed: number): Point[] => {
 
     currentY = (CANVAS_HEIGHT * 0.7) - noise;
     
-    // Clamp
+    // Clamp to keep within screen bounds roughly
     if (currentY > CANVAS_HEIGHT - 50) currentY = CANVAS_HEIGHT - 50;
     if (currentY < 100) currentY = 100;
 
@@ -153,7 +174,7 @@ const App: React.FC = () => {
   const bikeRef = useRef<BikePhysics>({ x: 100, y: 0, velocity: 0, angle: 0, angularVelocity: 0, lean: 0 });
   const inputsRef = useRef({ throttle: false, brake: false, left: false, right: false, nitro: false });
   const terrainRef = useRef<Point[]>([]);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
@@ -161,7 +182,7 @@ const App: React.FC = () => {
 
   // Load Data on Mount
   useEffect(() => {
-    const savedData = localStorage.getItem('jalalBikerData_v2');
+    const savedData = localStorage.getItem('jalalBikerData_v3');
     if (savedData) {
         try {
             const parsed = JSON.parse(savedData);
@@ -196,7 +217,7 @@ const App: React.FC = () => {
         ownedBikes: newBikes,
         selectedBikeId: newSelected
     };
-    localStorage.setItem('jalalBikerData_v2', JSON.stringify(data));
+    localStorage.setItem('jalalBikerData_v3', JSON.stringify(data));
     setUnlockedLevels(newLevel);
     setCoins(newCoins);
     setOwnedBikes(newBikes);
@@ -219,7 +240,7 @@ const App: React.FC = () => {
   const startLevel = useCallback((levelId: number) => {
     if (levelId > unlockedLevels) return; // Anti-cheat
 
-    const seed = levelId * 777;
+    const seed = levelId * 999;
     const length = 4000 + (levelId * 1500); 
     terrainRef.current = generateTerrain(length, seed);
     
@@ -238,7 +259,6 @@ const App: React.FC = () => {
     setCurrentLevel(levelId);
     setGameState(GameState.PLAYING);
 
-    // Ensure music plays if not muted
     if (!isMuted && audioRef.current && audioRef.current.paused) {
         audioRef.current.play().catch(e => console.log("Auto play prevented", e));
     }
@@ -259,8 +279,8 @@ const App: React.FC = () => {
     const groundRearY = getTerrainHeight(rearX, terrain);
     const groundFrontY = getTerrainHeight(frontX, terrain);
     
-    // Check if airborne (distance from ground > small threshold)
-    const isAirborne = Math.abs(bike.y - groundRearY) > 10;
+    // Check if airborne (distance from ground > threshold)
+    const isAirborne = Math.abs(bike.y - groundRearY) > 15;
 
     const targetAngle = Math.atan2(groundFrontY - groundRearY, frontX - rearX);
     
@@ -270,18 +290,16 @@ const App: React.FC = () => {
     // Normal Throttle
     if (inputs.throttle) bike.velocity += ACCELERATION;
     
-    // NITRO / SUPER BOOST
+    // NITRO
     const currentMaxSpeed = inputs.nitro ? MAX_NITRO_SPEED : MAX_SPEED;
     if (inputs.nitro) {
         bike.velocity += NITRO_ACCELERATION;
-        // Nitro spin in air
         if (isAirborne) {
-             bike.angularVelocity -= 0.02; // Automatic backflip tendency with nitro
+             bike.angularVelocity -= 0.03; // Auto flip with nitro in air
         }
     }
 
     if (inputs.brake) bike.velocity -= BRAKE_FORCE;
-    
     bike.velocity *= FRICTION;
     
     if (bike.velocity > currentMaxSpeed) bike.velocity = currentMaxSpeed;
@@ -289,39 +307,26 @@ const App: React.FC = () => {
 
     bike.x += Math.cos(bike.angle) * bike.velocity;
     
-    // Simplified Suspension / Gravity
+    // Y Position / Gravity Logic
     if (!isAirborne && bike.y > groundRearY - 5) {
          bike.y = groundRearY;
     } else {
-        // Apply gravity to Y if we ever implement full 2D physics, 
-        // but currently Y is tied to terrain X. 
-        // NOTE: In this 2.5D style engine, Y is strictly terrain bound unless we add jump physics.
-        // To simulate "Air", we use the difference between bike.y and terrainHeight for logic,
-        // but visual Y remains on track or tracks closely. 
-        // For the requested mechanic (ramps), the terrain generator creates the "air".
-        // The previous implementation binds Y to terrain. 
-        // To strictly follow "moving away from yellow line", we rely on the steepness of the ramps.
-        bike.y = groundRearY; 
+        bike.y = groundRearY; // In this 2.5D projection, Y follows terrain curve for simplicity
     }
 
     // Angular Physics
-    // If airborne (on a ramp or jumping gap), input rotation is stronger
     const angleDiff = targetAngle - bike.angle;
-    const stability = inputs.nitro ? 0.05 : 0.15;
     
-    // Base stability (align to ground)
+    // Stability logic
+    const stability = inputs.nitro ? 0.05 : 0.15;
     bike.angularVelocity += angleDiff * stability;
     
-    // Manual Rotation
+    // Rotation Controls
     let rotationForce = ROTATION_SPEED;
     
-    // *** REQUESTED FEATURE: Spin fast in air ***
-    // We infer "air" or "ramp launch" by steep angles or if the user is boosting off a peak.
-    // Since this engine binds Y to terrain X, we simulate "air physics" by allowing 
-    // extreme rotation when the terrain drops away sharply (ramp peaks).
-    // We check the curvature or just apply a multiplier if the player inputs rotation.
-    if (Math.abs(angleDiff) > 0.5) {
-         // If bike angle is very different from terrain angle (flying off a ramp), boost rotation
+    // *** SUPER SPIN IN AIR ***
+    // If angle difference is large (jumping off a ramp), boost rotation significantly
+    if (Math.abs(angleDiff) > 0.4) {
          rotationForce *= AIR_ROTATION_BOOST;
     }
     
@@ -352,7 +357,8 @@ const App: React.FC = () => {
     requestRef.current = requestAnimationFrame(gameLoop);
   }, [gameState, coins, unlockedLevels, ownedBikes, selectedBikeId]);
 
-  // Drawing Functions per style
+  // --- DRAWING FUNCTIONS ---
+
   const drawWheel = (ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, color: string, speed: number) => {
     ctx.save();
     ctx.translate(x, y);
@@ -390,12 +396,10 @@ const App: React.FC = () => {
       drawWheel(ctx, 45, 0, 22, detail, Date.now());
 
       // Frame
-      ctx.beginPath();
-      ctx.moveTo(45, 0); ctx.lineTo(10, -50); 
+      ctx.beginPath(); ctx.moveTo(45, 0); ctx.lineTo(10, -50); 
       ctx.lineWidth = 4; ctx.strokeStyle = '#BDC3C7'; ctx.stroke(); // Forks
 
-      ctx.beginPath();
-      ctx.moveTo(-35, 0); ctx.lineTo(-10, -20); ctx.lineTo(10, -45); ctx.lineTo(-20, -10);
+      ctx.beginPath(); ctx.moveTo(-35, 0); ctx.lineTo(-10, -20); ctx.lineTo(10, -45); ctx.lineTo(-20, -10);
       ctx.fillStyle = '#222'; ctx.fill(); // Chassis
 
       ctx.beginPath(); ctx.moveTo(12, -48); ctx.quadraticCurveTo(0, -60, -20, -35); ctx.lineTo(8, -35);
@@ -421,7 +425,6 @@ const App: React.FC = () => {
       ctx.beginPath(); ctx.moveTo(-26, -80); ctx.lineTo(-32, -90); ctx.lineTo(-24, -83); ctx.fill();
       ctx.beginPath(); ctx.moveTo(-14, -80); ctx.lineTo(-8, -90); ctx.lineTo(-16, -83); ctx.fill();
       
-      // Exhaust
       if (nitro) {
           ctx.beginPath(); ctx.moveTo(-45, -5); ctx.lineTo(-80, -10); ctx.lineTo(-45, 0);
           ctx.fillStyle = '#00BFFF'; ctx.fill();
@@ -433,26 +436,22 @@ const App: React.FC = () => {
       drawWheel(ctx, -30, 0, 20, detail, Date.now());
       drawWheel(ctx, 30, 0, 20, detail, Date.now());
 
-      // Sport Body
-      ctx.beginPath();
-      ctx.moveTo(30, 0); ctx.lineTo(15, -35); ctx.lineTo(-15, -35); ctx.lineTo(-30, 0);
+      ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(15, -35); ctx.lineTo(-15, -35); ctx.lineTo(-30, 0);
       ctx.fillStyle = body; ctx.fill();
       
-      // Windshield
       ctx.beginPath(); ctx.moveTo(15, -35); ctx.lineTo(25, -50); ctx.lineTo(10, -35);
       ctx.fillStyle = '#3498DB'; ctx.fill();
 
-      // Rider (Racer)
+      // Rider
       ctx.beginPath(); ctx.moveTo(-10, -35); ctx.lineTo(-5, -20); ctx.lineTo(5, -10);
-      ctx.lineWidth = 5; ctx.strokeStyle = '#222'; ctx.stroke(); // Leg
+      ctx.lineWidth = 5; ctx.strokeStyle = '#222'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-10, -35); ctx.lineTo(5, -55);
-      ctx.lineWidth = 8; ctx.strokeStyle = detail; ctx.stroke(); // Body (Leaning forward)
+      ctx.lineWidth = 8; ctx.strokeStyle = detail; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(5, -50); ctx.lineTo(20, -40);
-      ctx.lineWidth = 4; ctx.strokeStyle = '#222'; ctx.stroke(); // Arm
+      ctx.lineWidth = 4; ctx.strokeStyle = '#222'; ctx.stroke();
 
-      // Helmet
       ctx.fillStyle = seat; ctx.beginPath(); ctx.arc(5, -60, 8, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.fillRect(5, -62, 6, 4); // Visor
+      ctx.fillStyle = '#111'; ctx.fillRect(5, -62, 6, 4);
 
       if (nitro) {
           ctx.beginPath(); ctx.moveTo(-30, -10); ctx.lineTo(-60, -15); ctx.lineTo(-30, -5);
@@ -461,34 +460,28 @@ const App: React.FC = () => {
   };
 
   const drawPolice = (ctx: CanvasRenderingContext2D, bikeConfig: BikeConfig, nitro: boolean) => {
-      const { body, detail, seat } = bikeConfig.colors;
+      const { body, detail } = bikeConfig.colors;
       drawWheel(ctx, -35, 0, 22, '#ECF0F1', Date.now());
       drawWheel(ctx, 40, 0, 22, '#ECF0F1', Date.now());
 
-      // Police Body (Bulky)
-      ctx.fillStyle = body; 
-      ctx.fillRect(-25, -30, 50, 20);
-      ctx.fillStyle = '#2C3E50';
-      ctx.fillRect(-35, -20, 20, 15); // Panniers
+      ctx.fillStyle = body; ctx.fillRect(-25, -30, 50, 20);
+      ctx.fillStyle = '#2C3E50'; ctx.fillRect(-35, -20, 20, 15);
 
-      // Siren
       const blink = Math.floor(Date.now() / 200) % 2 === 0;
       ctx.fillStyle = blink ? '#E74C3C' : '#3498DB';
       ctx.fillRect(-35, -35, 5, 10);
 
-      // Rider (Cop)
+      // Rider
       ctx.beginPath(); ctx.moveTo(-10, -30); ctx.lineTo(-5, -15); ctx.lineTo(5, -5);
-      ctx.lineWidth = 5; ctx.strokeStyle = '#2C3E50'; ctx.stroke(); // Leg
+      ctx.lineWidth = 5; ctx.strokeStyle = '#2C3E50'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-10, -30); ctx.lineTo(-5, -60);
-      ctx.lineWidth = 9; ctx.strokeStyle = '#3498DB'; ctx.stroke(); // Body
+      ctx.lineWidth = 9; ctx.strokeStyle = '#3498DB'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-5, -55); ctx.lineTo(20, -45);
-      ctx.lineWidth = 4; ctx.strokeStyle = '#F5CBA7'; ctx.stroke(); // Arm
+      ctx.lineWidth = 4; ctx.strokeStyle = '#F5CBA7'; ctx.stroke();
 
-      // Head
       ctx.fillStyle = '#F5CBA7'; ctx.beginPath(); ctx.arc(-5, -65, 7, 0, Math.PI*2); ctx.fill();
-      // Cop Hat
-      ctx.fillStyle = '#2C3E50'; ctx.fillRect(-12, -72, 14, 5); // Visor
-      ctx.beginPath(); ctx.arc(-5, -72, 8, Math.PI, 0); ctx.fill(); // Top
+      ctx.fillStyle = '#2C3E50'; ctx.fillRect(-12, -72, 14, 5);
+      ctx.beginPath(); ctx.arc(-5, -72, 8, Math.PI, 0); ctx.fill();
 
       if (nitro) {
           ctx.beginPath(); ctx.moveTo(-35, -10); ctx.lineTo(-70, -10); ctx.lineTo(-35, -5);
@@ -497,64 +490,54 @@ const App: React.FC = () => {
   };
 
   const drawScooter = (ctx: CanvasRenderingContext2D, bikeConfig: BikeConfig, nitro: boolean) => {
-      const { body, detail, seat } = bikeConfig.colors;
-      drawWheel(ctx, -25, 10, 12, '#FFF', Date.now()); // Small wheels
+      const { body, seat } = bikeConfig.colors;
+      drawWheel(ctx, -25, 10, 12, '#FFF', Date.now());
       drawWheel(ctx, 25, 10, 12, '#FFF', Date.now());
 
-      // Scooter Body (Curved)
       ctx.beginPath(); ctx.moveTo(25, 10); ctx.quadraticCurveTo(20, -30, 0, -30); ctx.lineTo(-25, -10);
       ctx.fillStyle = body; ctx.fill();
-      ctx.fillStyle = seat; ctx.fillRect(-15, -32, 20, 5); // Seat
+      ctx.fillStyle = seat; ctx.fillRect(-15, -32, 20, 5);
 
-      // Rider (Grandma)
+      // Rider
       ctx.beginPath(); ctx.moveTo(-5, -30); ctx.lineTo(0, -15); ctx.lineTo(5, 0);
-      ctx.lineWidth = 4; ctx.strokeStyle = '#E91E63'; ctx.stroke(); // Leg (Pink pants)
+      ctx.lineWidth = 4; ctx.strokeStyle = '#E91E63'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-5, -30); ctx.lineTo(-10, -55);
-      ctx.lineWidth = 8; ctx.strokeStyle = '#F1948A'; ctx.stroke(); // Body (Cardigan)
+      ctx.lineWidth = 8; ctx.strokeStyle = '#F1948A'; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-10, -50); ctx.lineTo(15, -45);
-      ctx.lineWidth = 3; ctx.strokeStyle = '#F5CBA7'; ctx.stroke(); // Arm
+      ctx.lineWidth = 3; ctx.strokeStyle = '#F5CBA7'; ctx.stroke();
 
-      // Head
       ctx.fillStyle = '#F5CBA7'; ctx.beginPath(); ctx.arc(-10, -60, 6, 0, Math.PI*2); ctx.fill();
-      // Glasses
       ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.strokeRect(-8, -62, 6, 2);
-      // Grey Hair bun
       ctx.fillStyle = '#BDC3C7'; ctx.beginPath(); ctx.arc(-12, -63, 7, 0, Math.PI*2); ctx.fill();
 
       if (nitro) {
           ctx.beginPath(); ctx.moveTo(-25, -5); ctx.lineTo(-40, 0); ctx.lineTo(-25, 5);
-          ctx.fillStyle = '#E91E63'; ctx.fill(); // Pink flame
+          ctx.fillStyle = '#E91E63'; ctx.fill();
       }
   };
 
-  // Render Function
   const drawFrame = (bikeOverride?: BikePhysics, levelOverride?: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Use passed bike or current ref (for game loop vs shop preview)
     const bike = bikeOverride || bikeRef.current;
-    
-    // If drawing for Shop preview, we might not have a level/terrain context
-    // So we just draw the bike at 0,0 center if no terrain
-    const isPreview = !levelOverride && !bikeOverride; // Rough check
+    const isPreview = !levelOverride && !bikeOverride;
 
     const width = CANVAS_WIDTH;
     const height = CANVAS_HEIGHT;
-    
     canvas.width = width;
     canvas.height = height;
 
     if (!isPreview) {
-        // --- GAME RENDER ---
+        // --- GAME MODE ---
         const cameraX = bike.x - width * 0.3;
         
         ctx.save();
         ctx.translate(-cameraX, 0); 
 
-        // Sky
+        // Background
         const gradient = ctx.createLinearGradient(cameraX, 0, cameraX, height);
         gradient.addColorStop(0, COLORS.skyTop);
         gradient.addColorStop(1, COLORS.skyBottom);
@@ -583,7 +566,7 @@ const App: React.FC = () => {
             ctx.moveTo(terrain[startIndex].x, height);
             ctx.lineTo(terrain[startIndex].x, terrain[startIndex].y);
             for (let i = startIndex; i <= endIndex; i++) {
-            ctx.lineTo(terrain[i].x, terrain[i].y);
+                ctx.lineTo(terrain[i].x, terrain[i].y);
             }
             ctx.lineTo(terrain[endIndex].x, height);
             ctx.closePath();
@@ -610,9 +593,7 @@ const App: React.FC = () => {
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 5;
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(0, -150);
-            ctx.stroke();
+            ctx.moveTo(0, 0); ctx.lineTo(0, -150); ctx.stroke();
             for(let r=0; r<4; r++) {
                 for(let c=0; c<4; c++) {
                     ctx.fillStyle = (r+c)%2===0 ? 'black' : 'white';
@@ -622,24 +603,28 @@ const App: React.FC = () => {
             ctx.restore();
         }
 
-        // --- BIKE TRANSFORM ---
         ctx.translate(bike.x, bike.y);
         ctx.rotate(bike.angle);
         const scale = 1.3;
         ctx.scale(scale, scale);
     } else {
-        // PREVIEW MODE RENDER (Background)
+        // --- PREVIEW MODE (SHOP) ---
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, '#2C3E50');
         gradient.addColorStop(1, '#000000');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
         
+        // Spotlight effect
+        ctx.beginPath();
+        ctx.ellipse(width/2, height/2 + 200, 400, 100, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fill();
+        
         ctx.translate(width/2, height/2);
         ctx.scale(3, 3);
     }
 
-    // DRAW BIKE BASED ON STYLE
     const config = BIKES.find(b => b.id === (isPreview ? selectedBikeId : selectedBikeId)) || BIKES[0];
     const isNitro = inputsRef.current.nitro;
 
@@ -662,7 +647,7 @@ const App: React.FC = () => {
     inputsRef.current[type] = active;
   };
   
-  // Input Listeners... (kept same as before)
+  // Keyboard Listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'ArrowUp' || e.key === 'w') inputsRef.current.throttle = true;
@@ -698,8 +683,7 @@ const App: React.FC = () => {
       }
   };
 
-
-  // --- Render UI Screens ---
+  // --- UI Screens ---
 
   const renderMainMenu = () => (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-blue-400 via-orange-300 to-orange-500">
@@ -789,7 +773,7 @@ const App: React.FC = () => {
                <div className="w-12"></div>
            </div>
            
-           <div className="bg-[#3a1a1e] p-6 rounded-xl border border-[#A65D57] text-white text-right leading-relaxed h-[60vh] overflow-y-auto arabic-text">
+           <div className="bg-[#3a1a1e] p-6 rounded-xl border border-[#A65D57] text-white text-right leading-relaxed h-[60vh] overflow-y-auto arabic-text custom-scrollbar">
                <h3 className="text-[#F9E79F] text-xl font-bold mb-2">شروط الاستخدام</h3>
                <p className="mb-4 text-gray-300">
                    مرحباً بكم في لعبة Biker Lane. باستخدامك لهذه اللعبة، فإنك توافق على شروط الاستخدام هذه. اللعبة مخصصة لأغراض الترفيه فقط.
@@ -804,11 +788,6 @@ const App: React.FC = () => {
                <p className="mb-4 text-gray-300">
                    جميع الحقوق محفوظة للمطورين. يمنع نسخ أو تعديل أو إعادة توزيع اللعبة دون إذن مسبق.
                </p>
-
-               <h3 className="text-[#F9E79F] text-xl font-bold mb-2">اتصل بنا</h3>
-               <p className="text-gray-300">
-                   إذا كان لديك أي استفسارات، يرجى التواصل مع فريق التطوير.
-               </p>
            </div>
         </div>
     </div>
@@ -816,62 +795,101 @@ const App: React.FC = () => {
 
   const renderShop = () => (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm z-50">
-       <div className="bg-[#4A2328] w-full max-w-5xl h-[90vh] p-6 rounded-3xl border-4 border-[#F9E79F] flex flex-col">
-           <div className="flex justify-between items-center mb-2">
-               <button onClick={() => setGameState(GameState.MENU)} className="bg-[#E6B0AA] p-2 rounded-lg border-2 border-[#F9E79F]">
-                   <ArrowLeft size={32} color="#4A2328" />
-               </button>
-               <div className="text-center">
-                   <h2 className="text-4xl text-[#F9E79F] font-black arabic-text">الدراجات النارية</h2>
-                   <p className="text-[#E6B0AA] text-lg font-bold arabic-text mt-1">اختار دراجتك</p>
-               </div>
-               <div className="bg-[#3a1a1e] px-4 py-2 rounded-lg border border-[#F9E79F] flex items-center gap-2">
-                   <Coins className="text-yellow-400" />
-                   <span className="text-[#F9E79F] text-2xl font-bold">{coins}</span>
-               </div>
-           </div>
+       <div className="bg-[#4A2328] w-full max-w-6xl h-[90vh] p-6 rounded-3xl border-4 border-[#F9E79F] flex flex-col lg:flex-row gap-6">
            
-           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-y-auto p-4 custom-scrollbar">
-               {BIKES.map((bike) => {
-                   const owned = ownedBikes.includes(bike.id);
-                   const selected = selectedBikeId === bike.id;
-                   
-                   return (
-                   <div 
-                    key={bike.id}
-                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-between p-2 border-4 transition-all ${selected ? 'border-[#2ECC71] bg-[#1a1a1a]' : 'border-[#E6B0AA] bg-[#3a1a1e]'}`}
-                   >
-                       <div className="text-[#F9E79F] font-bold text-center text-xs sm:text-sm">{bike.name}</div>
-                       
-                       {/* Simplified Visual Representation */}
-                       <div className="flex-1 w-full flex items-center justify-center relative overflow-hidden rounded-lg my-2 bg-gradient-to-b from-blue-300 to-orange-200">
-                            <div className="text-4xl">
+           {/* LEFT: Preview */}
+           <div className="lg:w-1/2 flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                    <button onClick={() => setGameState(GameState.MENU)} className="bg-[#E6B0AA] p-2 rounded-lg border-2 border-[#F9E79F]">
+                        <ArrowLeft size={32} color="#4A2328" />
+                    </button>
+                    <div className="bg-[#3a1a1e] px-4 py-2 rounded-lg border border-[#F9E79F] flex items-center gap-2">
+                        <Coins className="text-yellow-400" />
+                        <span className="text-[#F9E79F] text-2xl font-bold">{coins}</span>
+                    </div>
+                </div>
+                
+                <div className="flex-1 bg-black rounded-2xl border-4 border-[#F9E79F] overflow-hidden relative shadow-inner">
+                    {/* Live Preview of Selected Bike */}
+                     <canvas 
+                        ref={(canvas) => {
+                            if(canvas) {
+                                const ctx = canvas.getContext('2d');
+                                if(ctx) {
+                                    canvas.width = canvas.offsetWidth;
+                                    canvas.height = canvas.offsetHeight;
+                                    const config = BIKES.find(b => b.id === selectedBikeId) || BIKES[0];
+                                    
+                                    // Draw Simple Preview
+                                    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                                    gradient.addColorStop(0, '#2C3E50');
+                                    gradient.addColorStop(1, '#111');
+                                    ctx.fillStyle = gradient;
+                                    ctx.fillRect(0,0, canvas.width, canvas.height);
+                                    
+                                    ctx.save();
+                                    ctx.translate(canvas.width/2, canvas.height/2);
+                                    ctx.scale(3,3);
+                                    
+                                    if(config.style === BikeStyle.SPORT) drawSport(ctx, config, false);
+                                    else if(config.style === BikeStyle.POLICE) drawPolice(ctx, config, false);
+                                    else if(config.style === BikeStyle.SCOOTER) drawScooter(ctx, config, false);
+                                    else drawChopper(ctx, config, false);
+                                    
+                                    ctx.restore();
+                                }
+                            }
+                        }} 
+                        className="w-full h-full"
+                     />
+                     <div className="absolute bottom-4 left-0 right-0 text-center">
+                         <h3 className="text-4xl text-white font-black drop-shadow-lg">
+                             {BIKES.find(b => b.id === selectedBikeId)?.name}
+                         </h3>
+                     </div>
+                </div>
+           </div>
+
+           {/* RIGHT: List */}
+           <div className="lg:w-1/2 flex flex-col bg-[#3a1a1e] rounded-2xl border-4 border-[#A65D57] p-4 overflow-hidden">
+                <h2 className="text-4xl text-[#F9E79F] font-black arabic-text text-center mb-4">الدراجات النارية</h2>
+                
+                <div className="grid grid-cols-2 gap-4 overflow-y-auto custom-scrollbar p-2">
+                    {BIKES.map((bike) => {
+                        const owned = ownedBikes.includes(bike.id);
+                        const selected = selectedBikeId === bike.id;
+                        
+                        return (
+                        <button 
+                            key={bike.id}
+                            onClick={() => owned ? selectBike(bike.id) : buyBike(bike.id, bike.price)}
+                            disabled={!owned && coins < bike.price}
+                            className={`relative aspect-square rounded-xl p-2 border-4 transition-all flex flex-col items-center justify-between group 
+                                ${selected ? 'border-[#2ECC71] bg-[#1a1a1a]' : 'border-[#E6B0AA] bg-[#4A2328] hover:bg-[#5d3237]'}
+                                ${!owned && coins < bike.price ? 'opacity-50 grayscale' : ''}
+                            `}
+                        >
+                            <div className="text-[#F9E79F] font-bold text-center text-sm">{bike.name}</div>
+                            
+                            <div className="text-5xl my-2 transform group-hover:scale-110 transition-transform">
                                 {bike.style === BikeStyle.POLICE && '👮'}
                                 {bike.style === BikeStyle.SCOOTER && '👵'}
                                 {bike.style === BikeStyle.SPORT && '🏍️'}
                                 {bike.style === BikeStyle.CHOPPER && '🛵'}
                             </div>
-                       </div>
-                       
-                       {owned ? (
-                           <button 
-                            onClick={() => selectBike(bike.id)}
-                            className={`w-full py-2 rounded-lg font-bold text-sm ${selected ? 'bg-[#2ECC71] text-white' : 'bg-[#E6B0AA] text-[#4A2328]'}`}
-                           >
-                               {selected ? 'EQUIPPED' : 'SELECT'}
-                           </button>
-                       ) : (
-                           <button 
-                            onClick={() => buyBike(bike.id, bike.price)}
-                            disabled={coins < bike.price}
-                            className="w-full bg-[#F1C40F] py-2 rounded-lg font-bold text-[#4A2328] flex flex-col items-center disabled:opacity-50"
-                           >
-                               <span className="text-xs">BUY</span>
-                               <span className="flex items-center gap-1 text-sm"><Coins size={12}/> {bike.price}</span>
-                           </button>
-                       )}
-                   </div>
-               )})}
+                            
+                            {owned ? (
+                                <div className={`w-full py-1 rounded text-xs font-bold ${selected ? 'bg-[#2ECC71] text-white' : 'bg-[#E6B0AA] text-[#4A2328]'}`}>
+                                    {selected ? 'EQUIPPED' : 'OWNED'}
+                                </div>
+                            ) : (
+                                <div className="w-full bg-[#F1C40F] py-1 rounded text-[#4A2328] font-bold flex items-center justify-center gap-1">
+                                    <Coins size={12}/> {bike.price}
+                                </div>
+                            )}
+                        </button>
+                    )})}
+                </div>
            </div>
        </div>
     </div>
